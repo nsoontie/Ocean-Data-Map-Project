@@ -55,39 +55,40 @@ for drifter in drifters:
     #get drifter postions
         #interpulate postions to dataset grid
 
-def load_data(self):
+def load_data(self, ds):
     #open drifter
     ds_url = app.config['DRIFTER_URL']
     data_names = []
     data_units = []
-    with Dataset(ds_url % self.drifter, 'r') as ds: # open drifter file
-        self.name = ds.buoyid
+    
+    # open drifter file
+    self.name = ds.buoyid
 
-        self.imei = str(chartostring(ds['imei'][0]))
-        self.wmo = str(chartostring(ds['wmo'][0]))
+    self.imei = str(chartostring(ds['imei'][0]))
+    self.wmo = str(chartostring(ds['wmo'][0]))
 
-        t = netcdftime.utime(ds['data_date'].units)
+    t = netcdftime.utime(ds['data_date'].units)
 
-        d = []
-        for v in self.buoyvariables:
-            d.append(ds[v][:])
-            if "long_name" in ds[v].ncattrs():
-                data_names.append(ds[v].long_name)
-            else:
-                data_names.append(v)
+    d = []
+    for v in self.buoyvariables:
+        d.append(ds[v][:])
+        if "long_name" in ds[v].ncattrs():
+            data_names.append(ds[v].long_name)
+        else:
+            data_names.append(v)
 
-            if "units" in ds[v].ncattrs():
-                data_units.append(ds[v].units)
-            else:
-                data_units.append(None)
+        if "units" in ds[v].ncattrs():
+            data_units.append(ds[v].units)
+        else:
+            data_units.append(None)
 
-        self.data = d
+    self.data = d
 
-        self.times = t.num2date(ds['data_date'][:])
-        self.points = np.array([
-            ds['latitude'][:],
-            ds['longitude'][:],
-        ]).transpose()
+    self.times = t.num2date(ds['data_date'][:])
+    self.points = np.array([
+        ds['latitude'][:],
+        ds['longitude'][:],
+    ]).transpose()
 
     data_names = data_names[:len(self.buoyvariables)]
     data_units = data_units[:len(self.buoyvariables)]
@@ -219,7 +220,8 @@ def compute_modle(modle_dataset, frame_start, frame_end):
         self.variable_names = variable_names
         self.variable_units = variable_units  
     
-    
+def append_data(self, data, output_file):   
+
 #append to output_File
 #TODO add config
 exclude =['time_counter', 'nav_lon', 'nav_lat']
@@ -245,7 +247,8 @@ for drifter in drifters:
         #TODO open drifter file for wrighting
         with Dataset(Merged_file % drifter, 'w') as Merge_output:
             for md in mode_data_list:
-                with open_dataset(get_dataset_url(md)) as mode_dataset:    
+                with open_dataset(get_dataset_url(md)) as mode_dataset: 
+                    mode_dataset   
                     #create dimentions
                     for d in mode_dataset.dimensions.keys():
                         if d not in Merge_output.dimensions.keys() and d not in exclude:
@@ -296,5 +299,5 @@ for drifter in drifters:
             #TODO append data
 
 
-    def append_data(self, data, output_file):
+
           
