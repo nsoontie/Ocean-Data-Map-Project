@@ -1,3 +1,4 @@
+#from utils.function_profiler import profileit
 from netCDF4 import Dataset, netcdftime, chartostring
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
@@ -12,7 +13,7 @@ from data import open_dataset
 import time
 import datetime
 from scipy.interpolate import interp1d
-
+import time
 class DrifterPlotter(Plotter):
 
     def __init__(self, dataset_name: str, query: str, format: str):
@@ -42,6 +43,11 @@ class DrifterPlotter(Plotter):
 
         self.starttime = query.get('starttime')
         self.endtime = query.get('endtime')
+       
+    def chunker(self,seq, chunkSize):
+        return (seq[pos:pos + chunkSize] for pos in range(0, len(seq), chunkSize))
+
+    #@profileit
 
     def load_data(self):
         ds_url = current_app.config['DRIFTER_URL']
@@ -52,7 +58,7 @@ class DrifterPlotter(Plotter):
 
             self.imei = str(chartostring(ds['imei'][0]))
             self.wmo = str(chartostring(ds['wmo'][0]))
-
+            
             t = netcdftime.utime(ds['data_date'].units)
 
             d = []
@@ -78,7 +84,7 @@ class DrifterPlotter(Plotter):
 
         data_names = data_names[:len(self.buoyvariables)]
         data_units = data_units[:len(self.buoyvariables)]
-
+        
         for i, t in enumerate(self.times):
             if t.tzinfo is None:
                 self.times[i] = t.replace(tzinfo=pytz.UTC)
@@ -104,76 +110,98 @@ class DrifterPlotter(Plotter):
         if self.end < 0:
             self.end += len(self.times)
         self.end = np.clip(self.end, 0, len(self.times) - 1)
-
+        points = list(range(self.start , self.end) )
+        if (len(points)%2 ==1):
+           points.pop()
+        chunkSize = (len(points)//2)
         with open_dataset(self.dataset_config) as dataset:
             depth = int(self.depth)
+            modelData = []
+            model_data = []
+            output_times = []
+            finalMT = []
+            ModelData = []
+            final_mt = []
+            model_Data = []
+            model_Data = []
+            for v in self.variables:   
+                
+                
+                for chunk in self.chunker(points, chunkSize):
 
-            try:
-                model_start = np.where(
-                    dataset.timestamps <= self.times[self.start]
-                )[0][-1]
-            except IndexError:
-                model_start = 0
+                    startpoint = chunk[0]
+                    endpoint = chunk[-1]
+                
+                    try:
+                        
+                        model_start = np.where(
+                           dataset.timestamps <= self.times[startpoint]
+                        )[0][-1]
+                    except IndexError:
+                         model_start = 0
 
-            model_start -= 1
-            model_start = np.clip(model_start, 0, len(dataset.timestamps) - 1)
+                    model_start = np.clip(model_start, 0, len(dataset.timestamps) - 1)
 
-            try:
-                model_end = np.where(
-                    dataset.timestamps >= self.times[self.end]
-                )[0][0]
-            except IndexError:
-                model_end = len(dataset.timestamps) - 1
+                    try:
+                        model_end = np.where(
+                            dataset.timestamps >= self.times[endpoint]
+                        )[0][0]
+                    except IndexError:
+                        model_end = len(dataset.timestamps) - 1
 
-            model_end += 1
-            model_end = np.clip(
-                model_end,
-                model_start,
-                len(dataset.timestamps) - 1
-            )
+                    model_end = np.clip(
+                        model_end,
+                        model_start,
+                        len(dataset.timestamps) - 1
+                    )
+                   
+                    model = [time.mktime(t.timetuple()) for t in dataset.timestamps[model_start:model_end +1]]
+                    output= [time.mktime(t.timetuple()) for t in self.times[startpoint:endpoint+1 ]]
+                
+                    
+                    pts, dist, mt, md = dataset.get_path(
+                        self.points[startpoint:endpoint+1 ],
+                        depth,
+                        list(range(model_start, model_end+1 )),
+                        v,
+                        times=output
+                        
+                    )
+                    model_times = []
+                    f = interp1d(
+                        model,
+                        md,
+                        assume_sorted=True,
+                        bounds_error=False,
+                        )
+                    output_times.extend(output)
+                    model_times.extend(model)
+                    final_mt.extend(mt)
+                    
+                    modelData =(np.diag(f(mt)))
+                    ModelData = np.concatenate((ModelData,modelData))
+                     
+                   
+                model_Data.append(ModelData)
+            model_data = np.ma.array(model_Data)
+            for v in self.variables:    
+                variable_names = []
+                variable_units = []
+                scale_factors = []
 
-            model_times = [time.mktime(t.timetuple()) for t in dataset.timestamps[model_start:model_end + 1]]
-            output_times = [time.mktime(t.timetuple()) for t in self.times[self.start:self.end + 1]]
-            d = []
-            for v in self.variables:
-                pts, dist, mt, md = dataset.get_path(
-                    self.points[self.start:self.end + 1],
-                    depth,
-                    list(range(model_start, model_end + 1)),
-                    v,
-                    times=output_times
-                )
-
-                f = interp1d(
-                    model_times,
-                    md,
-                    assume_sorted=True,
-                    bounds_error=False,
-                )
-
-                d.append(np.diag(f(mt)))
-
-            model_data = np.ma.array(d)
-
-            variable_names = []
-            variable_units = []
-            scale_factors = []
-
-            for v in self.variables:
                 vc = self.dataset_config.variable[v]
                 variable_units.append(vc.unit)
                 variable_names.append(vc.name)
                 scale_factors.append(vc.scale_factor)
-
+  
             for idx, sf in enumerate(scale_factors):
                 model_data[idx, :] = np.multiply(model_data[idx, :], sf)
 
             self.model_data = model_data
-            self.model_times = list(map(datetime.datetime.utcfromtimestamp, mt))
+            self.model_times = list(map(datetime.datetime.utcfromtimestamp, final_mt))
             self.variable_names = variable_names
             self.variable_units = variable_units
 
-    def plot(self):
         if self.showmap:
             width = 2
             width_ratios = [2, 7]
@@ -220,6 +248,7 @@ class DrifterPlotter(Plotter):
 
             if v == 'sst' and 'votemper' in self.variables:
                 i = self.variables.index('votemper')
+               
                 plt.plot(
                     self.model_times,
                     self.model_data[i]
