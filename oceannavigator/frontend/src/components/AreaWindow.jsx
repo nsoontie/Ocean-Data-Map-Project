@@ -597,6 +597,16 @@ export default class AreaWindow extends React.Component {
         state={this.state.dataset_0} 
         onUpdate={this.onLocalUpdate}
       />
+      <ComboBox 
+      key='driftmapduration' 
+      id='driftmapduration' 
+      state={} 
+      def='default' 
+      onUpdate={this.onLocalUpdate} 
+      url='/api/dataset/' 
+      title={_("Drift duration")}
+      >
+      </ComboBox>
     </Panel>);
     
     const compare_dataset = <div key='compare_dataset'>
