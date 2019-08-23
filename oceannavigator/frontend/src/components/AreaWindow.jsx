@@ -18,6 +18,7 @@ import StatsTable from "./StatsTable.jsx";
 import ImageSize from "./ImageSize.jsx";
 import CustomPlotLabels from "./CustomPlotLabels.jsx";
 import DatasetSelector from "./DatasetSelector.jsx";
+import DriftmapDatasetSelector from "./DriftmapDatasetSelector.jsx";
 import Icon from "./Icon.jsx";
 import TimePicker from "./TimePicker.jsx";
 import PropTypes from "prop-types";
@@ -46,6 +47,9 @@ export default class AreaWindow extends React.Component {
         dataset_quantum: props.dataset_0.dataset_quantum,
         time: props.dataset_0.time,
         depth: props.dataset_0.depth,
+      },
+      driftmap_dataset: {
+        dataset: "",
       },
       // Should dataset/variable changes in this window
       // propagate to the entire site?
@@ -578,6 +582,22 @@ export default class AreaWindow extends React.Component {
         </ComboBox>
       </div>
     </Panel>);
+
+    const driftmapSettings = (<Panel
+      collapsible
+      defaultExpanded
+      header={_("Drift map Information")}
+      bsStyle='primary'
+      key='driftmap_settings'
+    >
+      <DriftmapDatasetSelector 
+        key='driftmapdatasetselector'
+        id='driftmapdatasetselector'
+        multiple={this.state.currentTab === 3}
+        state={this.state.dataset_0} 
+        onUpdate={this.onLocalUpdate}
+      />
+    </Panel>);
     
     const compare_dataset = <div key='compare_dataset'>
       <div style={{"display": this.props.dataset_compare ? "block" : "none"}}>
@@ -673,6 +693,7 @@ export default class AreaWindow extends React.Component {
         />;
         break;
       case 2:
+        plot_query.type = "statistics";
         plot_query.time = this.state.dataset_0.time;
         plot_query.area = this.props.area;
         plot_query.depth = this.state.dataset_0.depth;
@@ -687,6 +708,18 @@ export default class AreaWindow extends React.Component {
 
         content = <StatsTable query={plot_query}/>;
         break;
+      case 3:
+          plot_query.type = "drift_map";
+          plot_query.dataset = this.state.driftmap_dataset.dataset;
+          plot_query.bbox = this.calculateAreaBoundingBox(this.props.area[0]);
+          leftInputs = [globalSettings, driftmapSettings];
+
+          content = <PlotImage 
+            query={plot_query}
+            permlink_subquery={this.state}
+            action={this.props.action}
+            />;
+          break;
     }
 
     return (
@@ -698,6 +731,7 @@ export default class AreaWindow extends React.Component {
         >
           <NavItem eventKey={1}>{_("Map")}</NavItem>
           <NavItem eventKey={2}>{_("Statistics")}</NavItem>
+          <NavItem eventKey={3}>{_("Drift Map")}</NavItem>
         </Nav>
         <Row>
           <Col lg={2}>
